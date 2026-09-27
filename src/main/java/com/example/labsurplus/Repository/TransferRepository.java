@@ -12,4 +12,6 @@ public interface TransferRepository extends JpaRepository<Transfer, Integer> {
     boolean existsByOfferId(Integer offerId);
     boolean existsByToLabId(Integer toLabId);
     List<Transfer> findAllByToLabIdAndReceivedAtIsNotNull(Integer toLabId);
+    List<Transfer> findAllByToLabIdAndReceivedAtIsNull(Integer toLabId);       // [جديد]
+    List<Transfer> findAllByFromLabIdAndReceivedAtIsNotNull(Integer fromLabId); // [جديد]
 }

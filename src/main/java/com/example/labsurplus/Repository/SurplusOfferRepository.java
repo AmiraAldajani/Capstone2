@@ -11,4 +11,5 @@ public interface SurplusOfferRepository extends JpaRepository<SurplusOffer, Inte
     SurplusOffer findSurplusOfferById(Integer id);
     boolean existsByItemId(Integer itemId);
     List<SurplusOffer> findAllByStatus(String status);
+    List<SurplusOffer> findAllByItemIdAndStatusIn(Integer itemId, List<String> statuses); // [جديد]
 }

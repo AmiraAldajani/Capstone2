@@ -85,4 +85,13 @@ public class SurplusRequestController {
             return ResponseEntity.status(400).body(new ApiResponse(message));
         return ResponseEntity.status(200).body(new ApiResponse("Request rejected"));
     }
+
+    // [جديد]
+    @GetMapping("/byLab/{labId}")
+    public ResponseEntity<?> byLab(@PathVariable Integer labId) {
+        List<SurplusRequest> requests = surplusRequestService.byLab(labId);
+        if (requests == null)
+            return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
+        return ResponseEntity.status(200).body(requests);
+    }
 }

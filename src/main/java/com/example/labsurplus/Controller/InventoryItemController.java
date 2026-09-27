@@ -68,4 +68,13 @@ public class InventoryItemController {
             return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
         return ResponseEntity.status(200).body(items);
     }
+
+    // [جديد]
+    @PostMapping("/notifyNearExpiry/{labId}")
+    public ResponseEntity<?> notifyNearExpiry(@PathVariable Integer labId) {
+        String message = inventoryItemService.notifyNearExpiry(labId);
+        if (!message.equals("success"))
+            return ResponseEntity.status(400).body(new ApiResponse(message));
+        return ResponseEntity.status(200).body(new ApiResponse("Near-expiry alert emailed to the lab"));
+    }
 }

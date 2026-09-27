@@ -16,4 +16,5 @@ public interface SurplusRequestRepository extends JpaRepository<SurplusRequest, 
     List<SurplusRequest> findAllByOfferId(Integer offerId);
     List<SurplusRequest> findAllByOfferIdAndStatus(Integer offerId, String status);
     SurplusRequest findSurplusRequestByOfferIdAndStatus(Integer offerId, String status);
+    List<SurplusRequest> findAllByRequestingLabId(Integer requestingLabId); // [جديد]
 }

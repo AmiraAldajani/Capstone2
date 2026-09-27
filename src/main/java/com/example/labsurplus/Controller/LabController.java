@@ -65,4 +65,13 @@ public class LabController {
             return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
         return ResponseEntity.status(200).body(new ApiResponse("Total value of expired items still in stock: " + total + " SAR"));
     }
+
+    // [جديد]
+    @GetMapping("/donatedValue/{labId}")
+    public ResponseEntity<?> donatedValue(@PathVariable Integer labId) {
+        Double total = labService.donatedValue(labId);
+        if (total == null)
+            return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
+        return ResponseEntity.status(200).body(new ApiResponse("Total value donated to other labs: " + total + " SAR"));
+    }
 }

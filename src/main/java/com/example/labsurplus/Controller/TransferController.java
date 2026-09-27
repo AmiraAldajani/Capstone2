@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.Errors;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/transfer")
 @RequiredArgsConstructor
@@ -57,5 +59,14 @@ public class TransferController {
         if (!message.equals("success"))
             return ResponseEntity.status(400).body(new ApiResponse(message));
         return ResponseEntity.status(200).body(new ApiResponse("Received successfully. Inventory moved to the receiving lab"));
+    }
+
+    // [جديد]
+    @GetMapping("/pending/{labId}")
+    public ResponseEntity<?> pending(@PathVariable Integer labId) {
+        List<Transfer> transfers = transferService.pendingForLab(labId);
+        if (transfers == null)
+            return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
+        return ResponseEntity.status(200).body(transfers);
     }
 }

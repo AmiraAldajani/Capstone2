@@ -84,4 +84,10 @@ public class SurplusOfferController {
             return ResponseEntity.status(400).body(new ApiResponse(message));
         return ResponseEntity.status(200).body(new ApiResponse("Offer closed. Pending requests on it were rejected"));
     }
+
+    // [جديد]
+    @GetMapping("/urgent")
+    public ResponseEntity<?> urgent() {
+        return ResponseEntity.status(200).body(surplusOfferService.urgentOffers());
+    }
 }
