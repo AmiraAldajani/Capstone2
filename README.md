@@ -247,4 +247,4 @@ src/main/java/com/example/labsurplus/
 
 ## Author
 
-Built as a capstone project by [Your name].
+Built as a capstone project by Amira.
