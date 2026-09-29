@@ -1,5 +1,6 @@
 package com.example.labsurplus.Service;
 
+import com.example.labsurplus.Api.ApiException;
 import com.example.labsurplus.Model.InventoryItem;
 import com.example.labsurplus.Model.Lab;
 import com.example.labsurplus.Repository.InventoryItemRepository;
@@ -26,26 +27,23 @@ public class InventoryItemService {
         return inventoryItemRepository.findAll();
     }
 
-    public String addItem(InventoryItem item) {
+    public void addItem(InventoryItem item) {
         if (labRepository.findLabById(item.getLabId()) == null)
-            return "Lab not found";
-        item.setId(null); // [جديد] لو انرسل id بالـ body ما يكتب فوق صنف موجود
+            throw new ApiException("Lab not found");
+        item.setId(null); // لو انرسل id بالـ body ما يكتب فوق صنف موجود
         inventoryItemRepository.save(item);
-        return "success";
     }
 
-    public String updateItem(Integer id, InventoryItem item) {
+    public void updateItem(Integer id, InventoryItem item) {
         InventoryItem old = inventoryItemRepository.findInventoryItemById(id);
         if (old == null)
-            return "Item not found";
+            throw new ApiException("Item not found");
         if (labRepository.findLabById(item.getLabId()) == null)
-            return "Lab not found";
-        // [جديد] صنف عليه عروض ما ينقل لمختبر ثاني، وإلا يصير donorLabId في العرض غلط
+            throw new ApiException("Lab not found");
         if (!old.getLabId().equals(item.getLabId()) && surplusOfferRepository.existsByItemId(id))
-            return "Can't change the lab of an item that has surplus offers";
-        // [جديد] الكمية ما تنزل تحت المحجوز في عروض مفتوحة
+            throw new ApiException("Can't change the lab of an item that has surplus offers");
         if (item.getQuantity() < surplusOfferService.reservedQuantity(id))
-            return "Quantity can't be less than what is reserved in open offers";
+            throw new ApiException("Quantity can't be less than what is reserved in open offers");
         old.setLabId(item.getLabId());
         old.setName(item.getName());
         old.setCategory(item.getCategory());
@@ -57,40 +55,34 @@ public class InventoryItemService {
         old.setStorageCondition(item.getStorageCondition());
         old.setLastConsumedDate(item.getLastConsumedDate());
         inventoryItemRepository.save(old);
-        return "success";
     }
 
-    public String deleteItem(Integer id) {
+    public void deleteItem(Integer id) {
         InventoryItem item = inventoryItemRepository.findInventoryItemById(id);
         if (item == null)
-            return "Item not found";
+            throw new ApiException("Item not found");
         if (surplusOfferRepository.existsByItemId(id))
-            return "Can't delete an item that has surplus offers";
+            throw new ApiException("Can't delete an item that has surplus offers");
         inventoryItemRepository.delete(item);
-        return "success";
     }
 
-    // تسجيل صرف من الصنف: ينقص الكمية ويحدّث تاريخ آخر صرف
-    public String consume(Integer itemId, Integer amount) {
+
+    public void consume(Integer itemId, Integer amount) {
         InventoryItem item = inventoryItemRepository.findInventoryItemById(itemId);
         if (item == null)
-            return "Item not found";
+            throw new ApiException("Item not found");
         if (amount < 1)
-            return "Amount has to be 1 or more";
-        // [تعديل] ما ينصرف من الكمية المحجوزة في عروض فائض
+            throw new ApiException("Amount has to be 1 or more");
         if (amount > item.getQuantity() - surplusOfferService.reservedQuantity(itemId))
-            return "Amount is more than the available quantity (part of it is reserved in surplus offers)";
+            throw new ApiException("Amount is more than the available quantity (part of it is reserved in surplus offers)");
         item.setQuantity(item.getQuantity() - amount);
         item.setLastConsumedDate(LocalDate.now());
         inventoryItemRepository.save(item);
-        return "success";
     }
 
-    // التنبيه المبكر: أصناف تنتهي خلال 6 أشهر وما انصرف منها شيء من 3 أشهر
-    // ترجع null لو المختبر مو موجود
     public List<InventoryItem> nearExpiry(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab ID not found");
         LocalDate today = LocalDate.now();
         List<InventoryItem> result = new ArrayList<>();
         for (InventoryItem item : inventoryItemRepository.findAllByLabId(labId)) {
@@ -106,16 +98,15 @@ public class InventoryItemService {
         return result;
     }
 
-    // [جديد] يرسل التنبيه المبكر لإيميل المختبر، عشان يعرض الأصناف كفائض قبل ما تضيع
-    public String notifyNearExpiry(Integer labId) {
+    public void notifyNearExpiry(Integer labId) {
         Lab lab = labRepository.findLabById(labId);
         if (lab == null)
-            return "Lab not found";
+            throw new ApiException("Lab not found");
         if (lab.getEmail() == null || lab.getEmail().isBlank())
-            return "This lab has no email";
+            throw new ApiException("This lab has no email");
         List<InventoryItem> items = nearExpiry(labId);
         if (items.isEmpty())
-            return "No items close to expiry, nothing to send";
+            throw new ApiException("No items close to expiry, nothing to send");
         StringBuilder text = new StringBuilder();
         text.append("These items expire within 6 months and haven't been used in the last 3 months.\n");
         text.append("Consider offering them as surplus so another lab can use them:\n\n");
@@ -125,6 +116,5 @@ public class InventoryItemService {
                     .append(" | ").append(item.getQuantity()).append(" ").append(item.getUnit())
                     .append(" | expires ").append(item.getExpiryDate()).append("\n");
         emailService.notifyLab(lab, "Items close to expiry in " + lab.getName(), text.toString());
-        return "success";
     }
 }

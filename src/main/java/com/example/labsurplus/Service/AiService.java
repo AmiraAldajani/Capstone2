@@ -20,10 +20,10 @@ public class AiService {
     private final RestClient restClient;
     private final String model;
 
-    // المفتاح والموديل ينقرون من application.properties، مو مكتوبين في الكود
+
     public AiService(@Value("${gemini.api.key}") String apiKey,
                      @Value("${ai.model}") String model) {
-        // [جديد] مهلة للاتصال والرد، عشان لو الـ API علّق ما يعلّق الطلب معه
+
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);  // 5 ثواني
         factory.setReadTimeout(30000);    // 30 ثانية
@@ -35,7 +35,7 @@ public class AiService {
         this.model = model;
     }
 
-    // يرجع رد الموديل كنص، أو null لو فشل الطلب
+
     public String ask(String systemPrompt, String userPrompt) {
         Map<String, Object> body = Map.of(
                 "systemInstruction", Map.of(
@@ -61,7 +61,7 @@ public class AiService {
         }
     }
 
-    // الرد يجي على شكل candidates -> content -> parts، نجمع النصوص من أول candidate
+
     private String extractText(GeminiResponse response) {
         if (response == null || response.candidates() == null || response.candidates().isEmpty())
             return null;
@@ -71,7 +71,7 @@ public class AiService {
             for (Part part : first.content().parts())
                 if (part.text() != null && !Boolean.TRUE.equals(part.thought()))
                     text.append(part.text());
-        // [جديد] لو ما رجع نص نسجل السبب (مثل MAX_TOKENS أو SAFETY) عشان نعرف وش صار
+        // لو ما رجع نص نسجل السبب (مثل MAX_TOKENS أو SAFETY) عشان نعرف وش صار
         if (text.isEmpty()) {
             log.warn("AI returned no text, finishReason: {}", first.finishReason());
             return null;

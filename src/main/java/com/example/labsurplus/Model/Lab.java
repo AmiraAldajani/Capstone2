@@ -23,7 +23,7 @@ public class Lab {
     @Column(nullable = false, unique = true)
     private String name;
 
-    // اختياري حاليًا، يصير إلزامي لما نضيف كلاس Center
+    // اختياري حاليا لين التوسع بعد مانضيف كلاس Center
     private Integer centerId;
 
     @NotEmpty(message = "Enter the lab head's name")

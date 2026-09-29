@@ -14,8 +14,7 @@ import org.springframework.stereotype.Service;
 public class EmailService {
     private final JavaMailSender mailSender;
 
-    // [تعديل] لو فشل الإرسال (سيرفر الإيميل طايح، إيميل غلط...) ينسجل في اللوق بس،
-    // وما يرمي exception يخرّب العملية الأساسية (موافقة، استلام...)
+
     public void sendEmail(String to, String subject, String text) {
         if (to == null || to.isBlank())
             return;
@@ -30,7 +29,6 @@ public class EmailService {
         }
     }
 
-    // [جديد] يرسل لإيميل المختبر لو المختبر موجود وعنده إيميل
     public void notifyLab(Lab lab, String subject, String text) {
         if (lab != null)
             sendEmail(lab.getEmail(), subject, text);

@@ -1,5 +1,6 @@
 package com.example.labsurplus.Service;
 
+import com.example.labsurplus.Api.ApiException;
 import com.example.labsurplus.Model.*;
 import com.example.labsurplus.Repository.*;
 import lombok.RequiredArgsConstructor;
@@ -22,57 +23,49 @@ public class LabService {
         return labRepository.findAll();
     }
 
-
-    public String addLab(Lab lab) {
+    public void addLab(Lab lab) {
         if (labRepository.existsByName(lab.getName()))
-            return "A lab with this name already exists";
-        lab.setId(null); // [جديد] لو انرسل id ما يكتب فوق مختبر موجود
+            throw new ApiException("A lab with this name already exists");
+        lab.setId(null);
         labRepository.save(lab);
-        return "success";
     }
 
-    public String updateLab(Integer id, Lab lab) {
+    public void updateLab(Integer id, Lab lab) {
         Lab old = labRepository.findLabById(id);
         if (old == null)
-            return "Lab not found";
+            throw new ApiException("Lab not found");
         if (!old.getName().equals(lab.getName()) && labRepository.existsByName(lab.getName()))
-            return "A lab with this name already exists";
+            throw new ApiException("A lab with this name already exists");
         old.setName(lab.getName());
         old.setCenterId(lab.getCenterId());
         old.setHeadName(lab.getHeadName());
         old.setEmail(lab.getEmail());
         labRepository.save(old);
-        return "success";
     }
 
-    public String deleteLab(Integer id) {
+    public void deleteLab(Integer id) {
         Lab lab = labRepository.findLabById(id);
         if (lab == null)
-            return "Lab not found";
+            throw new ApiException("Lab not found");
         if (inventoryItemRepository.existsByLabId(id))
-            return "Can't delete a lab that still has inventory items";
+            throw new ApiException("Can't delete a lab that still has inventory items");
         if (surplusRequestRepository.existsByRequestingLabId(id) || transferRepository.existsByToLabId(id))
-            return "Can't delete a lab that has requests or transfers";
+            throw new ApiException("Can't delete a lab that has requests or transfers");
         labRepository.delete(lab);
-        return "success";
     }
 
-    // ---------------- Extra endpoints ----------------
-
-    // مجموع قيمة المواد اللي استلمها المختبر من الفائض بدل ما يشتريها
     public Double savedValue(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab not found");
         double total = 0;
         for (Transfer t : transferRepository.findAllByToLabIdAndReceivedAtIsNotNull(labId))
             total = total + transferValue(t);
         return total;
     }
 
-    // [جديد] مجموع قيمة المواد اللي أعطاها المختبر لغيره بدل ما تنتهي عنده
     public Double donatedValue(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab not found");
         double total = 0;
         for (Transfer t : transferRepository.findAllByFromLabIdAndReceivedAtIsNotNull(labId))
             total = total + transferValue(t);
@@ -82,17 +75,17 @@ public class LabService {
     // قيمة الأصناف المنتهية اللي لسا بالمخزون
     public Double wastedValue(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab not found");
         LocalDate today = LocalDate.now();
         double total = 0;
         for (InventoryItem item : inventoryItemRepository.findAllByLabId(labId))
-            // [تعديل] كانت isBefore: الصنف اللي ينتهي اليوم ما كان ينحسب لا هنا ولا في nearExpiry
+
             if (!item.getExpiryDate().isAfter(today))
                 total = total + item.getUnitPrice() * item.getQuantity();
         return total;
     }
 
-    // [جديد] قيمة تحويل واحد = سعر الوحدة × الكمية المعتمدة (تستخدمها savedValue و donatedValue)
+
     private double transferValue(Transfer t) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(t.getOfferId());
         InventoryItem item = inventoryItemRepository.findInventoryItemById(offer.getItemId());

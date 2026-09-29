@@ -6,10 +6,7 @@ import com.example.labsurplus.Service.TransferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.Errors;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/transfer")
@@ -24,49 +21,30 @@ public class TransferController {
     }
 
     @PostMapping("/add")
-    public ResponseEntity<?> addTransfer(@RequestBody @Valid Transfer transfer, Errors errors) {
-        if (errors.hasErrors())
-            return ResponseEntity.status(400).body(new ApiResponse(errors.getFieldError().getDefaultMessage()));
-        String message = transferService.addTransfer(transfer);
-        if (!message.equals("success"))
-            return ResponseEntity.status(400).body(new ApiResponse(message));
+    public ResponseEntity<?> addTransfer(@RequestBody @Valid Transfer transfer) {
+        transferService.addTransfer(transfer);
         return ResponseEntity.status(200).body(new ApiResponse("Transfer added successfully"));
     }
 
     @PutMapping("/update/{id}")
-    public ResponseEntity<?> updateTransfer(@PathVariable Integer id, @RequestBody @Valid Transfer transfer, Errors errors) {
-        if (errors.hasErrors())
-            return ResponseEntity.status(400).body(new ApiResponse(errors.getFieldError().getDefaultMessage()));
-        String message = transferService.updateTransfer(id, transfer);
-        if (!message.equals("success"))
-            return ResponseEntity.status(400).body(new ApiResponse(message));
+    public ResponseEntity<?> updateTransfer(@PathVariable Integer id, @RequestBody @Valid Transfer transfer) {
+        transferService.updateTransfer(id, transfer);
         return ResponseEntity.status(200).body(new ApiResponse("Transfer updated successfully"));
     }
 
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<?> deleteTransfer(@PathVariable Integer id) {
-        String message = transferService.deleteTransfer(id);
-        if (!message.equals("success"))
-            return ResponseEntity.status(400).body(new ApiResponse(message));
+        transferService.deleteTransfer(id);
         return ResponseEntity.status(200).body(new ApiResponse("Transfer deleted successfully"));
     }
-
-    // ---------------- Extra endpoints ----------------
-
     @PutMapping("/receive/{transferId}/{receivedBy}/{temperature}")
     public ResponseEntity<?> receive(@PathVariable Integer transferId, @PathVariable String receivedBy, @PathVariable Double temperature) {
-        String message = transferService.receive(transferId, receivedBy, temperature);
-        if (!message.equals("success"))
-            return ResponseEntity.status(400).body(new ApiResponse(message));
+        transferService.receive(transferId, receivedBy, temperature);
         return ResponseEntity.status(200).body(new ApiResponse("Received successfully. Inventory moved to the receiving lab"));
     }
 
-    // [جديد]
     @GetMapping("/pending/{labId}")
     public ResponseEntity<?> pending(@PathVariable Integer labId) {
-        List<Transfer> transfers = transferService.pendingForLab(labId);
-        if (transfers == null)
-            return ResponseEntity.status(400).body(new ApiResponse("Lab not found"));
-        return ResponseEntity.status(200).body(transfers);
+        return ResponseEntity.status(200).body(transferService.pendingForLab(labId));
     }
 }

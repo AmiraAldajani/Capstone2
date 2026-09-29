@@ -1,5 +1,6 @@
 package com.example.labsurplus.Service;
 
+import com.example.labsurplus.Api.ApiException;
 import com.example.labsurplus.Model.InventoryItem;
 import com.example.labsurplus.Model.SurplusOffer;
 import com.example.labsurplus.Model.SurplusRequest;
@@ -25,66 +26,57 @@ public class SurplusOfferService {
     private final SurplusRequestRepository surplusRequestRepository;
     private final TransferRepository transferRepository;
     private final LabRepository labRepository;
-    private final EmailService emailService; // [جديد]
+    private final EmailService emailService;
 
     public List<SurplusOffer> getAllOffers() {
         return surplusOfferRepository.findAll();
     }
 
-    public String addOffer(SurplusOffer offer) {
+    public void addOffer(SurplusOffer offer) {
         InventoryItem item = inventoryItemRepository.findInventoryItemById(offer.getItemId());
         if (item == null)
-            return "Item not found";
-        // [جديد] ما ينعرض صنف منتهي، والإعلان لازم يخلص قبل ما ينتهي الصنف
+            throw new ApiException("Item not found");
         if (!item.getExpiryDate().isAfter(LocalDate.now()))
-            return "Can't offer an expired item";
+            throw new ApiException("Can't offer an expired item");
         if (!offer.getAnnouncedUntil().isBefore(item.getExpiryDate()))
-            return "Announcement has to end before the item expires";
-        // [تعديل] المتاح = الكمية - المحجوز في عروض ثانية مفتوحة
+            throw new ApiException("Announcement has to end before the item expires");
         if (offer.getQuantity() > item.getQuantity() - reservedQuantity(item.getId()))
-            return "Offered quantity is more than what the lab has available";
-        offer.setId(null);                    // [جديد] عشان ما يكتب فوق عرض موجود لو انرسل id
-        offer.setDonorLabId(item.getLabId()); // المتبرع = مالك الصنف
-        offer.setStatus("announced");         // الحالة يحددها النظام
+            throw new ApiException("Offered quantity is more than what the lab has available");
+        offer.setId(null);
+        offer.setDonorLabId(item.getLabId());
+        offer.setStatus("announced");
         if (offer.getUrgent() == null)
             offer.setUrgent(false);
         surplusOfferRepository.save(offer);
-        return "success";
     }
 
-    public String updateOffer(Integer id, SurplusOffer offer) {
+    public void updateOffer(Integer id, SurplusOffer offer) {
         SurplusOffer old = surplusOfferRepository.findSurplusOfferById(id);
         if (old == null)
-            return "Offer not found";
+            throw new ApiException("Offer not found");
         if (!old.getStatus().equals("announced"))
-            return "Only announced offers can be updated";
+            throw new ApiException("Only announced offers can be updated");
         InventoryItem item = inventoryItemRepository.findInventoryItemById(old.getItemId());
         // [جديد]
         if (!offer.getAnnouncedUntil().isBefore(item.getExpiryDate()))
-            return "Announcement has to end before the item expires";
-        // [تعديل] المحجوز في العروض الثانية (بدون هذا العرض نفسه)
+            throw new ApiException("Announcement has to end before the item expires");
         int reservedByOthers = reservedQuantity(item.getId()) - old.getQuantity();
         if (offer.getQuantity() > item.getQuantity() - reservedByOthers)
-            return "Offered quantity is more than what the lab has available";
+            throw new ApiException("Offered quantity is more than what the lab has available");
         old.setQuantity(offer.getQuantity());
         old.setAnnouncedUntil(offer.getAnnouncedUntil());
         old.setUrgent(offer.getUrgent() != null ? offer.getUrgent() : false);
         surplusOfferRepository.save(old);
-        return "success";
     }
 
-    public String deleteOffer(Integer id) {
+    public void deleteOffer(Integer id) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(id);
         if (offer == null)
-            return "Offer not found";
+            throw new ApiException("Offer not found");
         if (surplusRequestRepository.existsByOfferId(id) || transferRepository.existsByOfferId(id))
-            return "Can't delete an offer that has requests or a transfer";
+            throw new ApiException("Can't delete an offer that has requests or a transfer");
         surplusOfferRepository.delete(offer);
-        return "success";
     }
-
-    // [جديد] مجموع الكميات المعروضة من الصنف في عروض ما خلصت (announced / requested / approved)
-    // هذي الكمية محجوزة: ما تنصرف ولا تنعرض مرة ثانية. تتحرر لما يصير العرض transferred أو closed أو expired
     public int reservedQuantity(Integer itemId) {
         int total = 0;
         List<String> active = List.of("announced", "requested", "approved");
@@ -93,10 +85,7 @@ public class SurplusOfferService {
         return total;
     }
 
-    // ---------------- Extra endpoints ----------------
 
-    // العروض المفتوحة (announced أو requested) اللي ما انتهت مدتها
-    // صارت public عشان نعرضها كـ endpoint، وتستخدمها availableForLab و byCategory
     public List<SurplusOffer> openOffers() {
         LocalDate today = LocalDate.now();
         List<SurplusOffer> open = new ArrayList<>();
@@ -109,11 +98,9 @@ public class SurplusOfferService {
         return open;
     }
 
-    // العروض اللي يقدر مختبر معين يطلبها (مو من نفس المختبر)
-    // ترجع null لو المختبر مو موجود
     public List<SurplusOffer> availableForLab(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab not found");
         List<SurplusOffer> result = new ArrayList<>();
         for (SurplusOffer o : openOffers())
             if (!o.getDonorLabId().equals(labId))
@@ -132,7 +119,6 @@ public class SurplusOfferService {
         return result;
     }
 
-    // [جديد] العروض العاجلة المفتوحة (حقل urgent كان موجود بس ما أحد يستخدمه)
     public List<SurplusOffer> urgentOffers() {
         List<SurplusOffer> result = new ArrayList<>();
         for (SurplusOffer o : openOffers())
@@ -141,7 +127,7 @@ public class SurplusOfferService {
         return result;
     }
 
-    // يقفل العروض اللي انتهت مدتها وما أحد طلبها، ويرجع عددها
+    // يقفل العروض اللي انتهت مدتها وما أحد طلبها ويرجع عددها
     public int expireOld() {
         LocalDate today = LocalDate.now();
         int count = 0;
@@ -154,14 +140,14 @@ public class SurplusOfferService {
         return count;
     }
 
-    // المتبرع يسحب عرضه قبل ما يوافق على أي طلب، والطلبات المعلقة عليه تنرفض تلقائيًا
+    // المتبرع يسحب عرضه قبل ما يوافق على أي طلب والطلبات المعلقة عليه تنرفض
     @Transactional // [جديد]
-    public String closeOffer(Integer offerId) {
+    public void closeOffer(Integer offerId) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(offerId);
         if (offer == null)
-            return "Offer not found";
+            throw new ApiException("Offer not found");
         if (!offer.getStatus().equals("announced") && !offer.getStatus().equals("requested"))
-            return "Only announced or requested offers can be closed";
+            throw new ApiException("Only announced or requested offers can be closed");
         List<SurplusRequest> rejectedNow = new ArrayList<>();
         for (SurplusRequest r : surplusRequestRepository.findAllByOfferId(offerId))
             if (r.getStatus().equals("pending")) {
@@ -172,11 +158,10 @@ public class SurplusOfferService {
         offer.setStatus("closed");
         surplusOfferRepository.save(offer);
 
-        // [جديد] نبلغ المختبرات اللي انقفلت طلباتها
+        // نبلغ المختبرات اللي انقفلت طلباتها
         for (SurplusRequest r : rejectedNow)
             emailService.notifyLab(labRepository.findLabById(r.getRequestingLabId()),
                     "Surplus offer #" + offerId + " was withdrawn",
                     "The donor lab withdrew offer #" + offerId + ", so your request #" + r.getId() + " was closed.");
-        return "success";
     }
 }

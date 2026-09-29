@@ -39,7 +39,6 @@ public class SurplusOffer {
 
     private Boolean urgent = false;
 
-    // يحددها النظام، ما يرسلها المستخدم
-    // القيم: flagged, announced, requested, approved, transferred, closed, expired
+    // flagged, announced, requested, approved, transferred, closed, expired
     private String status;
 }

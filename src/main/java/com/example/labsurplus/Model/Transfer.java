@@ -29,11 +29,11 @@ public class Transfer {
     @Column(nullable = false)
     private Integer toLabId;
 
-    // لو ما انرسل، يصير internal تلقائيًا
+    // لو ما انرسل يصير internal
     @Pattern(regexp = "^(internal|external)$", message = "Type must be either internal or external.")
     private String type;
 
-    // هذي الثلاثة تتعبى وقت الاستلام
+    // تتعبى وقت الاستلام
     private String receivedBy;
     private Double receivedTemperature;
     private LocalDateTime receivedAt;

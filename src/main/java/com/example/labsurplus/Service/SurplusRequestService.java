@@ -1,5 +1,6 @@
 package com.example.labsurplus.Service;
 
+import com.example.labsurplus.Api.ApiException;
 import com.example.labsurplus.DTO.RequestSummary;
 import com.example.labsurplus.Model.InventoryItem;
 import com.example.labsurplus.Model.SurplusOffer;
@@ -50,90 +51,75 @@ public class SurplusRequestService {
         return surplusRequestRepository.findAll();
     }
 
-    public String addRequest(SurplusRequest request) {
+    public void addRequest(SurplusRequest request) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(request.getOfferId());
         if (offer == null)
-            return "Offer not found";
+            throw new ApiException("Offer not found");
         if (!offer.getStatus().equals("announced") && !offer.getStatus().equals("requested"))
-            return "This offer is no longer open for requests";
-        // [جديد] ما نعتمد على إن أحد شغّل expireOld، نتحقق من التاريخ هنا
+            throw new ApiException("This offer is no longer open for requests");
         if (offer.getAnnouncedUntil().isBefore(LocalDate.now()))
-            return "The announcement period for this offer has ended";
+            throw new ApiException("The announcement period for this offer has ended");
         if (labRepository.findLabById(request.getRequestingLabId()) == null)
-            return "Requesting lab not found";
+            throw new ApiException("Requesting lab not found");
         if (request.getRequestingLabId().equals(offer.getDonorLabId()))
-            return "A lab can't request its own surplus";
+            throw new ApiException("A lab can't request its own surplus");
         if (request.getQuantity() > offer.getQuantity())
-            return "Requested quantity is more than what is offered";
+            throw new ApiException("Requested quantity is more than what is offered");
         if (surplusRequestRepository.existsByOfferIdAndRequestingLabId(request.getOfferId(), request.getRequestingLabId()))
-            return "This lab already requested this offer";
-        request.setId(null); // [جديد] لو انرسل id ما يكتب فوق طلب موجود
+            throw new ApiException("This lab already requested this offer");
+        request.setId(null);
         request.setStatus("pending");
         surplusRequestRepository.save(request);
         offer.setStatus("requested");
         surplusOfferRepository.save(offer);
-
-        // [جديد] نبلغ المتبرع إن فيه طلب جديد على عرضه
         emailService.notifyLab(labRepository.findLabById(offer.getDonorLabId()),
                 "New request on your surplus offer #" + offer.getId(),
                 "Request #" + request.getId() + " asks for " + request.getQuantity() + " from offer #" + offer.getId() + ".\n"
                         + "Justification: " + request.getJustification());
-        return "success";
     }
 
-    public String updateRequest(Integer id, SurplusRequest request) {
+    public void updateRequest(Integer id, SurplusRequest request) {
         SurplusRequest old = surplusRequestRepository.findSurplusRequestById(id);
         if (old == null)
-            return "Request not found";
+            throw new ApiException("Request not found");
         if (!old.getStatus().equals("pending"))
-            return "Only pending requests can be updated";
+            throw new ApiException("Only pending requests can be updated");
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(old.getOfferId());
         if (request.getQuantity() > offer.getQuantity())
-            return "Requested quantity is more than what is offered";
+            throw new ApiException("Requested quantity is more than what is offered");
         old.setQuantity(request.getQuantity());
         old.setJustification(request.getJustification());
         surplusRequestRepository.save(old);
-        return "success";
     }
 
-    public String deleteRequest(Integer id) {
+    public void deleteRequest(Integer id) {
         SurplusRequest request = surplusRequestRepository.findSurplusRequestById(id);
         if (request == null)
-            return "Request not found";
+            throw new ApiException("Request not found");
         if (request.getStatus().equals("approved"))
-            return "Can't delete an approved request";
+            throw new ApiException("Can't delete an approved request");
         surplusRequestRepository.delete(request);
         reopenOfferIfNoPending(request.getOfferId());
-        return "success";
     }
 
-    // ---------------- Extra endpoints ----------------
-
-    // المتبرع يشوف مين طلب فائضه. ترجع null لو العرض مو موجود
     public List<SurplusRequest> byOffer(Integer offerId) {
         if (surplusOfferRepository.findSurplusOfferById(offerId) == null)
-            return null;
+            throw new ApiException("Offer not found");
         return surplusRequestRepository.findAllByOfferId(offerId);
     }
-
-    // [جديد] المختبر الطالب يتابع طلباته وحالتها. ترجع null لو المختبر مو موجود
     public List<SurplusRequest> byLab(Integer labId) {
         if (labRepository.findLabById(labId) == null)
-            return null;
+            throw new ApiException("Lab not found");
         return surplusRequestRepository.findAllByRequestingLabId(labId);
     }
 
-    // ملخص بالـ AI للطلبات المعلقة على عرض، يساعد المتبرع يقرر. ترجع null لو العرض مو موجود
     public RequestSummary summary(Integer offerId) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(offerId);
         if (offer == null)
-            return null;
+            throw new ApiException("Offer not found");
         List<SurplusRequest> pending = surplusRequestRepository.findAllByOfferIdAndStatus(offerId, "pending");
-        // أقل من طلبين ما فيه شي نقارنه، فما نصرف طلب على الـ AI
         if (pending.size() < 2)
             return new RequestSummary(offerId, pending.size() + " pending request(s), nothing to compare", pending);
-
-        // نرسل بيانات الصنف والطلبات بس. ما نرسل أسماء المختبرات عشان ما يتحيز لمركز على حساب ثاني
         InventoryItem item = inventoryItemRepository.findInventoryItemById(offer.getItemId());
         StringBuilder prompt = new StringBuilder();
         prompt.append("Today: ").append(LocalDate.now()).append("\n");
@@ -143,7 +129,6 @@ public class SurplusRequestService {
         prompt.append("Storage: ").append(item.getStorageCondition()).append("\n\n");
         prompt.append("Pending requests:\n");
         for (SurplusRequest r : pending) {
-            // [جديد] نشيل <<< و >>> من نص المختبر عشان ما يقدر يقفل الحدود بنفسه ويكتب تعليمات برّاها
             String justification = r.getJustification().replace("<<<", "").replace(">>>", "");
             prompt.append("- Request ID ").append(r.getId())
                     .append(" | quantity: ").append(r.getQuantity()).append(" ").append(item.getUnit())
@@ -151,23 +136,20 @@ public class SurplusRequestService {
         }
 
         String answer = aiService.ask(SUMMARY_INSTRUCTIONS, prompt.toString());
-        // لو الـ AI فشل، الطلبات ترجع عادي والمتبرع يقارن بنفسه
         if (answer == null)
             answer = "AI summary is not available right now. Review the requests below manually";
         return new RequestSummary(offerId, answer, pending);
     }
-
-    // الموافقة على طلب، ورفض بقية الطلبات على نفس العرض
-    @Transactional // [جديد] كذا save ورا بعض: يا تنحفظ كلها يا ولا وحدة
-    public String approve(Integer requestId) {
+    @Transactional
+    public void approve(Integer requestId) {
         SurplusRequest request = surplusRequestRepository.findSurplusRequestById(requestId);
         if (request == null)
-            return "Request not found";
+            throw new ApiException("Request not found");
         if (!request.getStatus().equals("pending"))
-            return "Only pending requests can be approved";
+            throw new ApiException("Only pending requests can be approved");
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(request.getOfferId());
         if (!offer.getStatus().equals("requested"))
-            return "This offer already has an approved request or is closed";
+            throw new ApiException("This offer already has an approved request or is closed");
 
         List<SurplusRequest> rejectedNow = new ArrayList<>();
         for (SurplusRequest r : surplusRequestRepository.findAllByOfferId(offer.getId())) {
@@ -182,7 +164,6 @@ public class SurplusRequestService {
         offer.setStatus("approved");
         surplusOfferRepository.save(offer);
 
-        // [جديد] نبلغ المختبر المقبول، والمختبرات اللي انرفضت طلباتها
         emailService.notifyLab(labRepository.findLabById(request.getRequestingLabId()),
                 "Your surplus request #" + requestId + " was approved",
                 "Your request on offer #" + offer.getId() + " was approved. The donor lab will arrange the transfer.");
@@ -190,27 +171,23 @@ public class SurplusRequestService {
             emailService.notifyLab(labRepository.findLabById(r.getRequestingLabId()),
                     "Your surplus request #" + r.getId() + " was not selected",
                     "The donor lab approved another request on offer #" + offer.getId() + ".");
-        return "success";
     }
 
-    public String reject(Integer requestId) {
+    public void reject(Integer requestId) {
         SurplusRequest request = surplusRequestRepository.findSurplusRequestById(requestId);
         if (request == null)
-            return "Request not found";
+            throw new ApiException("Request not found");
         if (!request.getStatus().equals("pending"))
-            return "Only pending requests can be rejected";
+            throw new ApiException("Only pending requests can be rejected");
         request.setStatus("rejected");
         surplusRequestRepository.save(request);
         reopenOfferIfNoPending(request.getOfferId());
 
-        // [جديد]
         emailService.notifyLab(labRepository.findLabById(request.getRequestingLabId()),
                 "Your surplus request #" + requestId + " was rejected",
                 "The donor lab rejected your request on offer #" + request.getOfferId() + ".");
-        return "success";
     }
 
-    // لو ما بقى ولا طلب pending، يرجع العرض announced عشان يستقبل طلبات جديدة
     private void reopenOfferIfNoPending(Integer offerId) {
         SurplusOffer offer = surplusOfferRepository.findSurplusOfferById(offerId);
         if (offer.getStatus().equals("requested") && !surplusRequestRepository.existsByOfferIdAndStatus(offerId, "pending")) {
